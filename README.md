@@ -52,4 +52,3 @@ If you prefer to set up manually:
 
 - `GET /api/stocks`: Get data for all stocks
 - `GET /api/stocks/{symbol}`: Get detailed data for a specific stock
-
