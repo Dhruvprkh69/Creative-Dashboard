@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>52-Week Dash</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        .category-type-card {
+            transition: all 0.3s ease;
+            cursor: pointer;
+            height: 200px;
+        }
+        .category-type-card:hover {
+            transform: translateY(-10px) scale(1.02);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+        .category-card {
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .category-card:hover {
+            transform: translateY(-5px) scale(1.02);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+        .stock-card {
+            transition: transform 0.2s;
+        }
+        .stock-card:hover {
+            transform: translateY(-5px);
+        }
+        .loading {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+        }
+        .fade-enter {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        .fade-enter-active {
+            opacity: 1;
+            transform: translateY(0);
+            transition: opacity 0.5s ease, transform 0.5s ease;
+        }
+        .back-button {
+            transition: all 0.3s ease;
+        }
+        .back-button:hover {
+            transform: translateX(-5px);
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <header class="mb-8 text-center">
+            <h1 class="text-5xl font-bold text-gray-800 mb-2">52-Week Dash 📈</h1>
+            <p class="text-xl text-gray-600">Track Nifty Stocks by Categories</p>
+        </header>
+
+        <!-- Category Types View -->
+        <div id="category-types-view">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <!-- Category types will be inserted here -->
+            </div>
+        </div>
+
+        <!-- Categories View -->
+        <div id="categories-view" class="hidden">
+            <div class="mb-6">
+                <button onclick="showCategoryTypes()" class="back-button flex items-center px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700">
+                    <span class="mr-2">←</span> Back to Category Types
+                </button>
+            </div>
+            <h2 id="category-type-title" class="text-3xl font-bold text-gray-800 mb-6"></h2>
+            <div id="categories-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                <!-- Categories will be inserted here -->
+            </div>
+        </div>
+
+        <!-- Stocks View -->
+        <div id="stocks-view" class="hidden">
+            <div class="mb-6 flex justify-between items-center">
+                <button onclick="showCategories()" class="back-button flex items-center px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700">
+                    <span class="mr-2">←</span> Back to Categories
+                </button>
+                <div class="flex items-center space-x-4">
+                    <input type="text" id="search" placeholder="Search stocks..." 
+                           class="w-64 px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <button onclick="sortStocks('pct_from_high')" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
+                        Sort by % from High
+                    </button>
+                    <button onclick="sortStocks('pct_from_low')" class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600">
+                        Sort by % from Low
+                    </button>
+                </div>
+            </div>
+
+            <h2 id="category-title" class="text-3xl font-bold text-gray-800 mb-6"></h2>
+
+            <div id="loading" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                <!-- Loading placeholders -->
+            </div>
+
+            <div id="stocks-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 hidden">
+                <!-- Stock cards will be inserted here -->
+            </div>
+        </div>
+
+        <div id="error-message" class="hidden text-red-500 text-center py-8">
+            <!-- Error messages will be shown here -->
+        </div>
+    </div>
+
+    <script>
+        let stocksData = [];
+        let currentCategoryType = '';
+        const categoryTypesView = document.getElementById('category-types-view');
+        const categoriesView = document.getElementById('categories-view');
+        const stocksView = document.getElementById('stocks-view');
+        const loadingGrid = document.getElementById('loading');
+        const stocksGrid = document.getElementById('stocks-grid');
+        const errorMessage = document.getElementById('error-message');
+        const searchInput = document.getElementById('search');
+        const categoryTitle = document.getElementById('category-title');
+        const categoryTypeTitle = document.getElementById('category-type-title');
+
+        // Create category type card
+        function createCategoryTypeCard(type) {
+            const bgColors = {
+                'market-cap': 'bg-gradient-to-br from-blue-500 to-purple-600',
+                'business': 'bg-gradient-to-br from-green-500 to-teal-600'
+            };
+
+            return `
+                <div onclick="showCategoriesForType('${type.id}')" 
+                     class="category-type-card ${bgColors[type.id]} text-white rounded-lg p-8 flex flex-col justify-between">
+                    <div class="text-3xl font-bold mb-4">${type.name}</div>
+                    <div>
+                        <p class="text-lg opacity-90 mb-4">${type.description}</p>
+                        <span class="text-2xl">→</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Create category card
+        function createCategoryCard(category, stocks) {
+            const stockCount = stocks.length;
+            const randomColor = [
+                'bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-red-500',
+                'bg-yellow-500', 'bg-pink-500', 'bg-indigo-500', 'bg-teal-500'
+            ][Math.floor(Math.random() * 8)];
+
+            return `
+                <div onclick="showStocksForCategory('${category}')" 
+                     class="category-card ${randomColor} text-white rounded-lg p-6 flex flex-col justify-between">
+                    <div class="text-2xl font-bold mb-4">${category}</div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm opacity-90">${stockCount} Stocks</span>
+                        <span class="text-2xl">→</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Fetch and display category types
+        async function fetchCategoryTypes() {
+            try {
+                const response = await fetch('/api/category-types');
+                if (!response.ok) throw new Error('Failed to fetch category types');
+                
+                const data = await response.json();
+                const categoryTypesGrid = document.querySelector('#category-types-view .grid');
+                
+                categoryTypesGrid.innerHTML = data.types
+                    .map(type => createCategoryTypeCard(type))
+                    .join('');
+                
+            } catch (error) {
+                showError(error.message);
+            }
+        }
+
+        // Show categories for selected type
+        async function showCategoriesForType(type) {
+            try {
+                currentCategoryType = type;
+                const response = await fetch(`/api/categories/${type}`);
+                if (!response.ok) throw new Error('Failed to fetch categories');
+                
+                const categories = await response.json();
+                const categoriesGrid = document.getElementById('categories-grid');
+                
+                categoryTypeTitle.textContent = type === 'market-cap' ? 
+                    '🏆 Market Cap Categories' : '🏢 Business Group Categories';
+                
+                categoriesGrid.innerHTML = Object.entries(categories)
+                    .map(([category, stocks]) => createCategoryCard(category, stocks))
+                    .join('');
+                
+                categoryTypesView.classList.add('hidden');
+                categoriesView.classList.remove('hidden');
+                
+            } catch (error) {
+                showError(error.message);
+            }
+        }
+
+        // Show category types view
+        function showCategoryTypes() {
+            categoriesView.classList.add('hidden');
+            categoryTypesView.classList.remove('hidden');
+            errorMessage.classList.add('hidden');
+        }
+
+        // Show categories view
+        function showCategories() {
+            stocksView.classList.add('hidden');
+            categoriesView.classList.remove('hidden');
+            errorMessage.classList.add('hidden');
+        }
+
+        // Show stocks for selected category
+        async function showStocksForCategory(category) {
+            try {
+                categoriesView.classList.add('hidden');
+                stocksView.classList.remove('hidden');
+                loadingGrid.classList.remove('hidden');
+                stocksGrid.classList.add('hidden');
+                categoryTitle.textContent = category;
+                
+                createLoadingPlaceholders();
+                
+                const response = await fetch(`/api/categories/${currentCategoryType}/${encodeURIComponent(category)}`);
+                if (!response.ok) throw new Error('Failed to fetch stocks');
+                
+                stocksData = await response.json();
+                displayStocks(stocksData);
+                
+                loadingGrid.classList.add('hidden');
+                stocksGrid.classList.remove('hidden');
+                
+            } catch (error) {
+                showError(error.message);
+            }
+        }
+
+        // Create loading placeholders
+        function createLoadingPlaceholders() {
+            loadingGrid.innerHTML = Array(8).fill().map(() => `
+                <div class="bg-white rounded-lg shadow-md p-6 loading">
+                    <div class="h-6 bg-gray-200 rounded w-3/4 mb-4"></div>
+                    <div class="h-4 bg-gray-200 rounded w-1/2 mb-2"></div>
+                    <div class="h-4 bg-gray-200 rounded w-2/3 mb-2"></div>
+                    <div class="h-4 bg-gray-200 rounded w-1/3"></div>
+                </div>
+            `).join('');
+        }
+
+        // Format numbers
+        function formatNumber(num) {
+            return new Intl.NumberFormat('en-IN', {
+                maximumFractionDigits: 2,
+                minimumFractionDigits: 2
+            }).format(num);
+        }
+
+        // Create stock card
+        function createStockCard(stock) {
+            const isPositive = (num) => num > 0;
+            return `
+                <div class="stock-card bg-white rounded-lg shadow-md p-6">
+                    <div class="flex justify-between items-start mb-4">
+                        <div>
+                            <h3 class="text-xl font-semibold text-gray-800">${stock.symbol}</h3>
+                            <p class="text-sm text-gray-600">${stock.company_name || ''}</p>
+                        </div>
+                        <span class="text-lg font-bold">₹${formatNumber(stock.current_price)}</span>
+                    </div>
+                    <div class="space-y-2">
+                        <div class="flex justify-between">
+                            <span class="text-sm text-gray-600">52W High:</span>
+                            <span class="font-medium">₹${formatNumber(stock.week_52_high)}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-sm text-gray-600">52W Low:</span>
+                            <span class="font-medium">₹${formatNumber(stock.week_52_low)}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-sm text-gray-600">From High:</span>
+                            <span class="font-medium ${isPositive(stock.pct_from_high) ? 'text-green-500' : 'text-red-500'}">
+                                ${formatNumber(stock.pct_from_high)}%
+                            </span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-sm text-gray-600">From Low:</span>
+                            <span class="font-medium ${isPositive(stock.pct_from_low) ? 'text-green-500' : 'text-red-500'}">
+                                ${formatNumber(stock.pct_from_low)}%
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Display stocks
+        function displayStocks(stocks) {
+            stocksGrid.innerHTML = stocks
+                .map(stock => createStockCard(stock))
+                .join('');
+        }
+
+        // Sort stocks
+        function sortStocks(key) {
+            stocksData.sort((a, b) => b[key] - a[key]);
+            displayStocks(stocksData);
+        }
+
+        // Filter stocks
+        searchInput.addEventListener('input', (e) => {
+            const searchTerm = e.target.value.toLowerCase();
+            const filteredStocks = stocksData.filter(stock => 
+                stock.symbol.toLowerCase().includes(searchTerm) ||
+                (stock.company_name && stock.company_name.toLowerCase().includes(searchTerm))
+            );
+            displayStocks(filteredStocks);
+        });
+
+        // Show error message
+        function showError(message) {
+            loadingGrid.classList.add('hidden');
+            stocksGrid.classList.add('hidden');
+            errorMessage.textContent = `Error: ${message}`;
+            errorMessage.classList.remove('hidden');
+        }
+
+        // Initial load
+        fetchCategoryTypes();
+    </script>
+</body>
+</html> 
